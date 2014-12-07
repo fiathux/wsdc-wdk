@@ -37,8 +37,9 @@ WDK.BStd的前生——“Wondermask WStdBase”这个名称从当前版本开�
 3.  改进插件机制，新增高阶函数求导功能，植入插件的步骤变得更加简单，插件的结构也更加明晰
 4.  大幅增强迭代器的功能，提供更多的惰性求值（Lazy Evaluation）特性，性能小幅提升
 5.  map、each等各种枚举方法不再区分“列表”和“迭代器”，可以混用
-6.  内核功能可以通过高阶函数的“this”关键字导出，不再完全依赖全局命名空间
-7.  代码授权方案由“ `GPL 2.0 <http://www.gnu.org/licenses/old-licenses/gpl-2.0.html>`_ ”改为“
+6.  迭代器新增快速切片函数，简单情况下遍历速度提升10倍，并支持map、reduce和each函数
+7.  内核功能可以通过高阶函数的“this”关键字导出，不再完全依赖全局命名空间
+8.  代码授权方案由“ `GPL 2.0 <http://www.gnu.org/licenses/old-licenses/gpl-2.0.html>`_ ”改为“
     `LGPL <http://www.gnu.org/licenses/lgpl.html>`_ ”协议，一定程度允许闭源项目集成
 
 索引表

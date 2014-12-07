@@ -74,7 +74,7 @@
             }
 
             me.isIter=function(vrb){
-                return me.isFunc(vrb) && vrb.__isIterator;
+                return me.isFunc(vrb) && vrb.__isIterator && vrb.__genLoop;
             }
 
             me.isNum=function(vrb){
@@ -108,7 +108,7 @@
                     return function(){
                         try{ return exec.apply(this,arguments); }
                         catch(e){
-                            return iep(e,arguments);
+                            return iep && iep(e,arguments);
                         }
                     }
                 }
@@ -118,22 +118,35 @@
                 return function(iep){
                     return me.allTrap(exec)(function(e,args){
                         return e instanceof exceptProto ?
-                                iep(e,args) : me.exception(e);
+                                iep && iep(e,args) : me.exception(e);
                     });
                 }
             }
 
             me.IterEndTrap=function(exec){//Catch iterate-end exception
                 return function(iep){ return me.oneTrap(exceptIterEnd,exec)(
-                        function(e,args){ return iep(e.addit,args) }); }
+                        function(e,args){ return iep && iep(e.addit,args) }); }
             }
 
             //common iterator support {{{
             me.iterFactory=function(init,iter,quote,custom){
+                function genloop(cut,master){
+                    var first=true;
+                    return (custom && function(){
+                        if (first) first=false;
+                        else master=master.next();
+                        return master();
+                    }) || function(){
+                        if (first) first=false;
+                        else cut=iter(cut);
+                        return quote ? quote(cut) : cut;
+                    };
+                }
                 function producer(current){
                     var result=function(){return quote ? quote(current) : current;}
                     result.next=function(){ return producer(iter(current)); }
                     result.__isIterator=true;
+                    result.__genLoop=function(){return genloop(current,result);};
                     return (custom && custom(result)) || result;
                 }
                 return producer(init);
@@ -297,39 +310,84 @@
                 return result;
             }
 
-            me.map=function(){//Parellel(repeat) method
-                function defaultFunc(args){
+            var mapFactory=function(func){
+                return function(){
                     function defaultFunc(args){
-                        args[args.length]=(function(obj){ return obj; });
-                        args.length++;
-                        return args;
+                        function defaultFunc(args){
+                            args[args.length]=(function(obj){ return obj; });
+                            args.length++;
+                            return args;
+                        }
+                        var func=args[args.length-1];
+                        return (me.isFunc(func) && !me.isIter(func) && args) || defaultFunc(args)
                     }
-                    var func=args[args.length-1];
-                    return (me.isFunc(func) && !me.isIter(func) && args) || defaultFunc(args)
+                    var qa=quickArgs(defaultFunc(arguments),["func"]);
+                    var result=[];
+                    return me.IterEndTrap(func.call(result,qa))(function(e,args){
+                        if (e.length) result.push(e[0]);
+                        return result;
+                    })();
                 }
-                var qa=quickArgs(defaultFunc(arguments),["func"]);
-                var result=[];
-                return me.IterEndTrap(function(){
-                    for (; true; qa.args=qa.args.next())
-                        result.push( qa.func(qa.args(),qa.args) );
-                })(function(e,args){
-                    if (e.length) result.push(e[0]);
-                    return result;
-                })();
+            }
+
+            me._map=function(){//Loop method(full)
+                var mpfunc=function(qa){
+                    var result=this;
+                    return function(){
+                        for (;true;qa.args=qa.args.next())
+                            result.push( qa.func(qa.args(),qa.args) );
+                    }
+                }
+                return mapFactory(mpfunc).apply(this,arguments);
             };
 
-            me.reduce=function(){//Reduce data
-                var qa=(arguments.length<3 && quickArgs(arguments,["func"])) || 
-                    quickArgs(arguments,["init","func"]);
-                var result=qa.init;
-                return me.IterEndTrap(function(){
-                    for (; true; qa.args=qa.args.next()) result=qa.func(qa.args(),result,qa.args);
-                })(function(e,args){ return e.length ? e[0] : result; })();
+            me.map=function(){//Loop method(quick)
+                var mpfunc=function(qa){
+                    var result=this;
+                    return function(){
+                        var qvs=qa.args.__genLoop();
+                        for (;;) result.push( qa.func(qvs()) );
+                    }
+                }
+                return mapFactory(mpfunc).apply(this,arguments);
+            };
+
+            var reduceFactory=function(func){
+                return function(){
+                    var qa=(arguments.length<3 && quickArgs(arguments,["func"])) || 
+                        quickArgs(arguments,["init","func"]);
+                    var result=[qa.init];
+                    return me.IterEndTrap(func.call(result,qa))(function(e,args){ 
+                        return e.length ? e[0] : result[0];
+                    })();
+                }
+            };
+
+            me._reduce=function(){//Reduce data(quick)
+                var redfunc=function(qa){
+                    var result=this;
+                    return function(){
+                        for (;true;qa.args=qa.args.next())
+                            result[0]=qa.func(qa.args(),result[0],qa.args);
+                    }
+                }
+                return reduceFactory(redfunc).apply(this,arguments);
+            };
+
+            me.reduce=function(){//Reduce data(quick)
+                var redfunc=function(qa){
+                    var result=this;
+                    return function(){
+                        var qvs=qa.args.__genLoop();
+                        for (;;) result[0]=qa.func(qvs(),result[0]);
+                    }
+                }
+                return reduceFactory(redfunc).apply(this,arguments);
             };
 
             me.each=function(input,func){//Enumerate array(Same as JQuery)
                 me.IterEndTrap(function(){
-                    for (var iIt=me.various_(input); true; iIt=iIt.next()) func(iIt());
+                    for (var iIt=me.various_(input).__genLoop(); true;) func(iIt());
                 })()();
                 return input;
             };

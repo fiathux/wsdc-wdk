@@ -14,6 +14,9 @@
 
 //Initialize block
 (function(initfunc){
+    //Do eval with unique enviroment
+    var safe_eval=function(strexp){ return eval(strexp); }
+
     //Framework Core{{{
     var _WStdCore=(function(){
         //DNA Library object {{{
@@ -151,18 +154,6 @@
                 }
                 return producer(init);
             }
-
-            /*me.iterFactory=function(entity,iter,quote,custom){
-                function generalQuote(){ return this; }
-                if (!quote) quote=generalQuote;
-                var result = function() { return quote.apply(entity,arguments); }
-                result.next = function() {
-                    return me.iterFactory(iter(entity),iter,quote,custom);
-                }
-                result.__isIterator=true;
-                if (custom)result = custom(result);
-                return result;
-            }*/
 
             me.stepper_=function(begin,step){//Numbers stepper iterator
                 begin=begin || 0;
@@ -363,7 +354,7 @@
                 }
             };
 
-            me._reduce=function(){//Reduce data(quick)
+            me._reduce=function(){//Reduce data(full)
                 var redfunc=function(qa){
                     var result=this;
                     return function(){
@@ -399,7 +390,7 @@
                 });
             };
 
-            //A constructor that  from source object do shallow copy and inherit specify prototype
+            //A constructor that from source object do shallow copy and inherit specify prototype
             me.imitator=function(source,proto){
                 var pnc=function(){};
                 pnc.prototype=(me.isNone(proto) && {}) || proto;
@@ -420,6 +411,24 @@
                     }
                 }
                 return c(func,[]);
+            }
+
+            //Fixed evaluate
+            me.eval=function(strexp){
+               function fixS(instr){ //Trim space
+                   var phead=/^\s+/.exec(instr);
+                   var ptail=/\s+$/.exec(instr);
+                   var sstr=(phead && instr.substring(phead[0].length)) || instr;
+                   return (ptail && sstr.slice(0,-ptail[0].length)) || sstr;
+               }
+               //Fixed expression tail
+               function fixT_exp(instr){ return (/;$/.test(instr) && instr.slice(0,-1)) || instr; }
+               var prestr=fixS(strexp);
+               //Json object expression
+                if (/^\{/.test(strexp)) return safe_eval(["(",fixT_exp(prestr),")"].join(""));
+                else if (/^function\s*\(\s*\)/.test(prestr)) //Anonymous function expression
+                    return safe_eval(["{true && (",fixT_exp(prestr),")}"].join(""));
+                else return safe_eval(["{",prestr,"}"].join("")); //Other wise
             }
         }
         DNA.prototype=new coreObj();

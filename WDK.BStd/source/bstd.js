@@ -315,7 +315,7 @@
                     var qa=quickArgs(defaultFunc(arguments),["func"]);
                     var result=[];
                     return me.IterEndTrap(func.call(result,qa))(function(e,args){
-                        if (e.length) result.push(e[0]);
+                        if (e.addit) result.push(e.addit[0]);
                         return result;
                     })();
                 }
@@ -349,7 +349,7 @@
                         quickArgs(arguments,["init","func"]);
                     var result=[qa.init];
                     return me.IterEndTrap(func.call(result,qa))(function(e,args){ 
-                        return e.length ? e[0] : result[0];
+                        return e.addit ? e.addit[0] : result[0];
                     })();
                 }
             };

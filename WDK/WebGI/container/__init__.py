@@ -1,0 +1,1 @@
+from WDK.WebGI.container.wdkenv import basicEnvdef getMWEnv(**arg):    if "env" in arg: cEnv=arg["env"]    else: cEnv = basicEnv()    if "proc" in arg: cEnv=arg["proc"](cEnv)    if "item" in arg:        for k,v in arg["item"]: cEnv.addStatic(k,v)    def mw_env(appmw):        return lambda env,rpo: appmw(cEnv.begin(env),rpo)    return mw_env

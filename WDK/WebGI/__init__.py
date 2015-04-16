@@ -1,0 +1,1 @@
+def CreateApplication(root_path):pass

@@ -1,7 +1,7 @@
 #
 
-COMPILE 	= cat
-#COMPILE         = java -jar compiler.jar
+#COMPILE 	= cat
+COMPILE         = java -jar compiler.jar
 DISTPATH	= dist
 
 .PHONY: help web node clean

@@ -185,9 +185,11 @@ _GWonder(_GWonder(function(){
         testdom = document.createElement("audio");
         if (testdom && testdom.play) this["audio"]=true;
         testdom = document.createElement("canvas");
-        if (testdom && testdom.getContext("2d")) this["2d"]=true;
-        testdom = document.createElement("canvas");
-        if (testdom && testdom.getContext("webgl")) this["webgl"]=true;
+        if (testdom && testdom.getContext){
+            if (testdom && testdom.getContext("2d")) this["2d"]=true;
+            testdom = document.createElement("canvas");
+            if (testdom && testdom.getContext("webgl")) this["webgl"]=true;
+        }
         return ua;
     });
     //}}}

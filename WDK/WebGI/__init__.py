@@ -1,1 +1,1 @@
-def CreateApplication(root_path):pass
+def CreateInstance(**arg):pass

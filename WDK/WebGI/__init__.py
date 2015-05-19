@@ -1,1 +1,1 @@
-def CreateInstance(**arg):pass
+from WDK.WebGI.container import instancedef CreateInstance(fileconf=None,strconf=None):    inst=instance.init(fileconf,strconf)    imod = __import__(inst.name,fromlist="instanceEntry")    return imod.instanceEntry(inst)

@@ -11,7 +11,7 @@ def mw_cookies(appmw):
     cook_spitm = lambda cstr: map(cook_spkv,cstr.split(";"))
     # Auto set cookies on response call
     def cookrepo(env,rpo):
-        return preset.response_rep(rpo,None,env["wdk.setcookies"].genHttpHeader())
+        return preset.response_rep(rpo,None,lambda:env["wdk.setcookies"].genHttpHeader())
     def execute(env,rpo):
         if "HTTP_COOKIE" in env and env["HTTP_COOKIE"]:
             env["wdk.fromcookie"]=cookie.fromstr(env["HTTP_COOKIE"])

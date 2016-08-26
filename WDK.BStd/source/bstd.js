@@ -9,8 +9,10 @@
  * by the Free Software Foundation.
  * ---------------------------------------------
  * Fiathux Su
- * 2014-5-1
+ * 2014-2016
  */
+
+"use strict";
 
 //Initialize block
 (function(initfunc){
@@ -519,4 +521,339 @@
     //}}}
 
     initfunc(_WStdCore);
-})(function(core){ _GWonder=core; });
+})(function(core){ });
+
+//Initialize block 3.0
+var __WDK_BSTD_PROTO__ = (function(){
+  //Compatibility eval with unique enviroment
+  var inline_eval = function(strexp){ return eval(strexp); }
+
+  //Core object prototype
+  var coreObj=function(){ this.__WSTDVersion=3; };
+
+  //DNA Library object {{{
+  function _DNA() {
+    var me = this;
+
+    //Prototype and exception{{{
+    function _exceptIterEnd(){//Exception constructor who is flag iterate must be stop
+      this.msg="IterEnd";
+      this.exitObj=arguments;
+    }
+
+    function _protoList(){//Custom list prototype
+      this.length=0;
+      this.__isList=true;
+    }
+
+    me.LIST = function(){//Create List prototype
+      return new protoList();
+    }
+
+    me.exception = function(e){ throw e; } //Throw exception
+
+    me.trap=function(exceptProto){ //Catch exception
+      return function(exec){
+        return function(iep){
+          return function(){
+            try{ return exec.apply(this,arguments); }
+            catch(e){
+              return !exceptProto || e instanceof exceptProto ?
+                iep && iep(e,arguments) : me.exception(e);
+            }
+          }
+        }
+      }
+    }
+    //}}}
+
+    //Data type support {{{ 
+    me.isDef=function(vrb){//Check if variable is defined
+      return vrb!==undefined;
+    }
+
+    me.isNull=function(vrb){//Check if variable is null
+      return vrb===null;
+    }
+
+    me.isNone=function(vrb){//Check if object is not been quoted
+      return !me.isDef(vrb) || me.isNull(vrb);
+    }
+
+    me.isFunc=function(vrb){
+      return typeof vrb=="function";
+    }
+
+    me.isNum=function(vrb){
+      return typeof vrb=="number";
+    }
+
+    me.isStr=function(vrb){
+      return typeof vrb=="string";
+    }
+
+    me.isBool=function(vrb){
+      return typeof vrb=="boolean";
+    }
+
+    me.isObj=function(vrb){
+      return typeof vrb=="object";
+    }
+
+    me.isSymbol=function(vrb){
+      return typeof vrb=="symbol";
+    }
+
+    me.isList=function(vrb){//Check if variable is list
+      function isArray(){ return vrb instanceof Array; };
+      function isNodeList() { try{return vrb instanceof NodeList;}catch(e){return false} }
+      function hadLen(){ return !me.isNone(vrb.length); };
+      function hadItem(){ return me.isDef(vrb[0]) && me.isDef(vrb[vrb.length-1]); };
+      function isCustom(){ return vrb.__isList==true; };
+      function setForce(){ return vrb instanceof _protoList; }
+      function notNone(){ 
+        return isArray() || isNodeList() || setForce() || 
+          (hadLen() && !me.isStr(vrb) && (isCustom() || hadItem()));
+      }
+      return !me.isNone(vrb) && notNone();
+    }
+
+    me.isCore=function(vrb){//Check if variable is the Core-object
+      return vrb instanceof coreObj;
+    }
+
+    me.isIter=function(vrb){
+      return me.isFunc(vrb) && vrb.__WSTDIter && vrb._simple;
+    }
+
+    me.iterable=function(vrb){ //Check if veriable is iterable object
+      return me.isIter(vrb) || me.isList(vrb);
+    }
+    //}}}
+
+    //Iterator support {{{
+    me.ITEREND=function(){//Stop iterate
+      me.exception((arguments.length && new _exceptIterEnd(arguments[0])) ||
+          new _exceptIterEnd());
+    }
+
+    me.iterTrap=function(exec){//Catch iterate-end exception
+       return function(iep){ return me.trap(_exceptIterEnd)(exec)(iep); }
+    }
+
+    //Iterator factory
+    me.iterFactory=function(data,iter,quote,advance){
+      var rst = function(){ return quote ? quote(data) : data; }
+      rst.next = function(){
+          return me.iterFactory(iter(data),iter,quote,advance);
+      }
+      rst._simple = function(){//Simple iterator
+          var current = data;
+          var tagBegin = true;
+          function firstMission(){
+              tagBegin = false;
+              return quote ? quote(current) : current;
+          }
+          function continueMission(){
+              current = iter(current);
+              return quote ? quote(current) : current;
+          }
+          return function(){
+            return tagBegin ? firstMission() : continueMission();
+          }
+      }
+      rst.__WSTDIter = function(){
+        return {
+          "data":data,
+          "iter":iter,
+          "quote":quote,
+          "advance":advance
+        };
+      };
+      return advance ? advance(rst) : rst;
+    }
+    //}}}
+
+    //Common iterator{{{
+    me.$NONE=function(){//Nothing iterator
+      return me.iterFactory(null,me.ITEREND,me.ITEREND);
+    }
+
+    me.$step = function(begin,step){//Numbers stepper iterator
+      begin=begin || 0;
+      step=step || 1;
+      return me.iterFactory(begin,function(ent){return ent+step;});
+    }
+
+    me.$range=function(begin,end){//Integer range iterator
+      var bg=(!me.isNone(end) && begin) || 0;
+      var ed=(me.isNone(end) ? begin : end) || 0;
+      if (bg==ed)return me.$NONE();
+      var stp=(bg<ed && 1) || -1;
+      return me.iterFactory(bg,function(ent){
+          return ent+stp!=ed ? ent+stp : me.ITEREND();
+      });
+    }
+
+    me.$infinity=function(){//Infinity iterator
+      function iter(prev){ return prev; };
+      return me.iterFactory(true,iter);
+    };
+
+    me.$onoff=function(){//Boolean state machine
+      function iter(prev){ return !prev; };
+      return me.iterFactory(true,iter);
+    }
+
+    me.$evolve=function(origi_iter,func,advance){//Map iterator‘s result
+      if (me.isNone(origi_iter) || me.isNone(func)) return me.$NONE();
+      var origiProf=origi_iter.__WSTDIter();
+      return (function(odata,oiter,oquote,oadvance){
+        function quote(data){ return func(data); }
+        function quote_ex(data){ return func(oquote(data)); }
+        return me.iterFactory(odata, oiter, (oquote && quote_ex) || quote,
+            oadvance ? (advance ? function(iterObj){return advance(oadvance(iterObj))} : oadvance):
+            advance);
+      })(origiProf.data,origiProf.iter,origiProf.quote,origiProf.advance);
+    }
+
+    me.$rotate=function(li,reflect){
+      //Todo: use poly
+      reflect = me.isBool(li) ? li : reflect;
+      li = li || this;
+      var max = li.length - 1;
+      var loop_gen = function(prev){ return prev < max ? prev + 1 : 0; }
+      var refl_gen = function(prev){
+        if (prev == max) reflect = false;
+        else if (prev == 0) reflect = true;
+        return prev + (reflect ? 1 : -1);
+      }
+      return me.iterFactory(0,(reflect && loop_gen) || refl_gen,function(cur){ return li[cur]; });
+    }
+
+    function enumItems(getItem,len,start,end) {
+      var emEnd = me.isNone(end) ? (me.isNone(start) ? len : start) : end;
+      var emStart = (!me.isNone(end) && start) || 0;
+      return (emStart == emEnd && me.$NONE()) || me.iterFactory(emStart,
+          function(last){return (last + 1 < emEnd && last + 1) || me.ITEREND();}, getItem);
+    }
+
+    me.$list=function(li,start,end){//List enumerate iterator
+      //Todo: use poly
+      function list4this_arg(){ //List self
+        start = li;
+        end = start;
+        return null;
+      }
+      li = (me.isNum(li) ? list4this_arg() : li) || this;
+      return enumItems(function(idx){return li[idx]},li.length,start,end);
+    }
+
+    me.$catalog=function(obj){//Object catalog iterator
+      obj = obj || this
+      var keys = [];
+      for (var i in obj) keys.push(i)
+      return me.$list(keys);
+    }
+
+    me.$chars=function(str,start,end){//String character iterator
+      if (me.isNone(str)) return me.$NONE();
+      return enumItems(function(idx){ return str.charAt(idx); },str.length,start,end);
+    }
+
+    me.$charuc=function(str,start,end){//String character iterator
+      if (me.isNone(str)) return me.$NONE();
+      return enumItems(function(idx){ return str.charCodeAt(idx); },str.length,start,end);
+    }
+
+    me.$iterable=function(anyone){//Convert anything to iterable object
+      function $single(obj){ return me.iterFactory(obj,me.ITEREND); }
+      return (me.isList(anyone) && me.$list(anyone)) || (me.isIter(anyone) && anyone) ||
+          $single(anyone);
+    }
+
+    me.$combine=function(){ //Combine several iterable object or unique element to one iterator
+      /*WARNING: this iterator preformence is very slowly*/
+      if (arguments.length < 1) return me.$NONE();
+      //Iterator swap
+      function testGetNextParent(p){ //Test and pass empty iterator
+        var imaster = p;
+        while(true){
+          var imaster = imaster.next();
+          try {
+            var sub = me.$iterable(imaster());
+            sub();
+            sub._pIter = imaster;
+            return sub;
+          }catch (e) {
+            if (e instanceof _exceptIterEnd) continue;//Jump empty iterator
+          }
+        }
+      }
+      function nextWithParent(iterObj){//Get next sub iterator item with parent
+        return me.trap(_exceptIterEnd)(function(){
+          var i = iterObj.next();
+          i._pIter = iterObj._pIter;z
+          return i;
+        })(function(){
+          return testGetNextParent(iterObj._pIter);
+        })();
+      }
+      //initialize iterate
+      var comb = me.$iterable(arguments.length > 1 ? arguments : arguments[0]);
+      var startObj = me.trap(_exceptIterEnd)(function(){
+        var i = me.trap(_exceptIterEnd)(function(i){ i();return i })(function(){
+          return testGetNextParent(comb);//Case: first one is empty
+        })(me.$iterable(comb()));
+        i._pIter = i._pIter || comb;
+        return i;
+      })(function(){
+        return me.$NONE(); //Case: No element
+      })();
+      //Create
+      return me.iterFactory(startObj,function(last){
+        return nextWithParent(last)
+      },function(currnet){return currnet()});
+    }
+    //}}}
+
+    me.poly=(function(){ //Parse polymiorphism call
+      /*  [
+       *    {
+       *      param:[typename list...],
+       *      func:function
+       *    }
+       *  ]
+       */
+      var parser = {
+        "func":function(i){ return me.isFunc(i); },
+        "Func":function(i){ return me.isFunc(i) && !me.isIter(i); },
+        "iter":function(i){ return me.isIter(i); },
+        "iterable":function(i){ return me.isIter(i) || me.isList(i); },
+        "string":function(i){ return me.isStr(i); },
+        "number":function(i){ return me.isNum(i); },
+        "bool":function(i){ return me.isBool(i); },
+        "object":function(i){ return me.isObj(i); },
+        "symbol":function(i){ return me.isSymbol(i); }
+      }
+      function paserAny(){
+      }
+      function expPaserContext(typeExpression){
+        var pStr = typeExpression.substr(1);
+        return function(){
+        }
+      }
+      return function(){
+        return function(){
+        }
+      }
+    })()
+
+    me.map = function(){
+    }
+  }
+  //}}}
+
+  return new _DNA()
+
+})()

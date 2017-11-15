@@ -1,7 +1,7 @@
 #
 
 #COMPILE 	= cat
-COMPILE         = java -jar compiler.jar
+COMPILE   = java -jar googlecompile/compiler.jar
 DISTPATH	= dist
 
 .PHONY: help web node clean
@@ -22,8 +22,8 @@ clean:
 $(DISTPATH):
 	mkdir $(DISTPATH)
 
-$(DISTPATH)/bstd-web.js: ./source/bstd.js ./source/webbase.js
-	cat ./source/bstd.js ./source/webbase.js|$(COMPILE)>$(DISTPATH)/bstd-web.js
+$(DISTPATH)/bstd-web.js: ./source/mio-sys.js ./source/mio-dom.js ./source/mio-check.js ./source/mio-ajax.js
+	cat ./source/mio-sys.js ./source/mio-dom.js ./source/mio-check.js ./source/mio-ajax.js|$(COMPILE)>$(DISTPATH)/bstd-web.js
 
-$(DISTPATH)/bstd-node.js: ./source/bstd.js
+$(DISTPATH)/bstd-node.js: ./source/mio-sys.js
 	$(COMPILE) ./source/bstd.js>$(DISTPATH)/bstd-node.js

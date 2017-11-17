@@ -28,12 +28,26 @@
   //try create W3C request
   var w3cReqTry = () => glob.XMLHttpRequest && (() => new XMLHttpRequest());
 
+  var HEXTAB = "0123456789abcdef".split("")
+  //URI encode with ArrayBuffer support
+  var objURICodec = (data) => {
+    var codeBin = (binview) => {
+      return _f.list((byt) => {
+        return "%" + HEXTAB[(byt>>>4) & 0xf] + HEXTAB[byt & 0xf];
+      })(_f.iList)(binview).join("")
+    }
+    if (glob.ArrayBuffer && data instanceof glob.ArrayBuffer){
+      return codeBin(new Uint8Array(data));
+    }
+    return encodeURIComponent(data);
+  };
+
   //prepare http requester
   var Requester = w3cReqTry() || winReqTry();
   if (!Requester){
     glob.console && glob.console.log("check x-http-request error!");
     return;
-  }
+  };
 
   //parameter codec
   var reqCoder = {
@@ -63,7 +77,7 @@
       "coder": (params) => {
         return _f.list((pf) => {
           return pf((k,v)=>{
-            return encodeURIComponent(k) + "=" + encodeURIComponent(v);
+            return objURICodec(k) + "=" + objURICodec(v);
           });
         })(_f.iList)(params).join("&")
       }
@@ -81,6 +95,7 @@
     var paramraw = null;
     var paramcodc = reqCoder.uri.coder;
     var paramclass = reqCoder.uri.dataclass;
+    var paramfrmclass = reqCoder.uri.dataclass;
 
     mod.method = "GET";
     mod.async = true;
@@ -95,18 +110,25 @@
         paramraw = data;
       };
       function rawObj(data){
-        paramraw = JSON.stringfy(data);
-        mod.cnttype = "application/json";
+        if (glob.ArrayBuffer && data instanceof glob.ArrayBuffer){
+          paramraw = data;
+        }else{
+          paramraw = JSON.stringify(data);
+          mod.cnttype = "application/json";
+        }
+        paramclass = "raw";
       };
       function rawNone(){ 
         paramraw = null;
+        paramclass = paramfrmclass;
       };
       typeof(raw) == "string" ? rawStr(raw) : (raw === null ? rawNone() : rawObj(raw));
     };
     mod.setParamCodec = (name) => {
       if (!reqCoder[name]) return false;
       paramcodc = reqCoder[name].coder;
-      paramclass = reqCoder[name].dataclass;
+      paramfrmclass = reqCoder[name].dataclass;
+      if (paramraw === null) paramclass = paramfrmclass;
       mod.cnttype = reqCoder[name].type;
       return true;
     }
@@ -159,7 +181,7 @@
     var stateComplete = (req) => {
       var httpstatus = req.status;
       if (Math.floor(httpstatus / 100) != 2) cbError(httpstatus);
-      else cbSuccess(httpstatus.responseText, httpstatus);
+      else cbSuccess(req.responseText, httpstatus);
     };
     //default state change processor
     var defaultState = (statecode ,req) => statecode == 4 && stateComplete(req);
@@ -178,7 +200,7 @@
       }
       //process addit parameter or RAW
       var procAdditData = (afterProc) => {
-        var data = mod.paramraw || (parameter.length && paramcodc(parameter));
+        var data = paramraw || (parameter.length && paramcodc(parameter));
         return afterProc ? afterProc(data) : data;
       }
       //require with http-content
@@ -204,9 +226,9 @@
         var psplit = () => {
           var paramtest = /.+\?.*/;
           var paramnone = /.+\?$/;
-          paramtest.test(url) ? (paramnone.test(url) ? "" : "&") : "?";
+          return paramtest.test(url) ? (paramnone.test(url) ? "" : "&") : "?";
         }
-        var pconv = paramclass == "uri" ? ((data) => data) : ((data) => encodeURIComponent(data));
+        var pconv = paramclass == "uri" ? ((data) => data) : ((data) => objURICodec(data));
         var url = procAdditData((data) => url + (data ? psplit() + pconv(data) : ""));
         return baseOpen(method, url) && (() => {
           req.send(null);
@@ -214,10 +236,10 @@
         })();
       }
       return {
-        "GET":(url) => withoutContent("GET"),
-        "DELETE":(url) => withoutContent("DELETE"),
-        "POST":(url) => withContent("POST"),
-        "PUT":(url) => withContent("PUT")
+        "GET":(url) => withoutContent("GET", url),
+        "DELETE":(url) => withoutContent("DELETE", url),
+        "POST":(url) => withContent("POST", url),
+        "PUT":(url) => withContent("PUT", url)
       }
     }
 
@@ -240,6 +262,30 @@
     //export module
     return mod;
   }
+
+  //Simple implament
+  dataReq.simpReq = (addheader) => (success) => (error) => (method) => (url) => (raw) => {
+    var reqobj = dataReq();
+    var procHeader = (k, v) => { //add header
+      reqobj.addHeader(k,v);
+      return procHeader
+    }
+    var procParam = (k, v) => { //add parameter send
+      reqobj.addParameter(k,v);
+      return procParam
+    }
+    addheader && addheader(procHeader);
+    success && reqobj.addSuccess(success);
+    error && reqobj.addError(error);
+    if (method) reqobj.method = method;
+    if (raw){
+      if (typeof(raw) == "function"){
+        var format = raw(procParam);
+        format && reqobj.setParamCodec(format);
+      }else reqobj.setRaw(raw);
+    }
+    return reqobj.req(url);
+  };
 
   //append to glob
   _f.ajax = dataReq;

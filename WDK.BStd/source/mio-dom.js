@@ -224,8 +224,6 @@
       return _BATCHDOM(rst);
     };
 
-    var dom_elem
-
     //CPS: batch set child
     var dom_child = function(){
       var addContent = ((cntlist) => {
@@ -317,6 +315,35 @@
     return dom;
   };
 
+  //current document ready event
+  var act_ready = () => {
+    var init_ie8 = () => {//compatible IE 8
+      var readyevent = [];
+      var docstate = () => {
+        if (doc.readyState == "complete"){
+          doc.detachEvent("onreadystatechange", docstate);
+          _f.each((act)=>act())(_f.iList)(readyevent)
+        }
+      }
+      doc.attachEvent('onreadystatechange', docstate);
+      return (act) => {
+        readyevent.push(act);
+      }
+    }
+    var init_w3c = () => {//for W3C
+      return (act) => {
+        doc.addEventListener("DOMContentLoaded", () => act(), false);
+      }
+    }
+    return (doc.addEventListener ? init_w3c : init_ie8)();
+  }
+
+  //current window loaded event
+  var act_load = () => {
+    return glob.addEventListener ? (act) => glob.addEventListener("load", () => act(), false) : 
+      glob.attachEvent("onload", () => act());
+  }
+
   //Add plugins
   _f._toy_((env, plugins, dna)=>{
     plugins.push((args) => { //Plugin
@@ -329,6 +356,8 @@
       var domRst = (li) => li && li.length > 0 && (() => _BATCHDOM(li));
       var argProc = condExp() || condDOM() || condDOMList();
       return domRst(argProc && argProc());
-    })
+    });
+    _f.onReady = act_ready(); //document ready
+    _f.onLoad = act_load(); //window loaded
   })()
 })();

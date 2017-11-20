@@ -99,7 +99,7 @@
 
     mod.method = "GET";
     mod.async = true;
-    mod.timeout = 30;
+    mod.timeout = 30000;
     mod.cnttype = reqCoder.uri.type;
     mod.user = null;
     mod.passwd = null;

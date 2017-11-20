@@ -45,9 +45,9 @@
   //iOS system parse{{{
   feature.push(function(ua){
     function ios_device(typename){
-      fobj[typename]=true;
-      fobj["os"]="ios";
-      fobj["mobile"]=true;
+      this[typename]=true;
+      this["os"]="ios";
+      this["mobile"]=true;
       return ua;
     }
     function ios_feature(parse,device){

@@ -35,6 +35,7 @@
     return domsel && (() => domsel(parse.substr(chk[1].length)));
   };
 
+  //DOM node filter
   var isDOMElem = (obj) => typeof(obj) == "object" && obj.nodeType &&
       (obj.nodeType == 1 || obj.nodeType == 9 || obj.nodeType == 11);
   var isDOMDoc = (obj) => typeof(obj) == "object" && obj.nodeType && obj.nodeType == 9;
@@ -49,19 +50,34 @@
 
   //make pure DOM list
   var DomList = function(dom){
-    var rst = {};
+    var rst = {"_DOC_OPT":false};
     var i = 0;
     _f.each((d)=>{
+      if (!isDOMElem(d)) return;
+      if (isDOMDoc(d)) rst._DOC_OPT = true;//tag has document item
       rst[i++] = d;
     })(_f.iList)(dom);
     rst.length = i;
     return rst;
   }
 
-  //batch operation for DOM list
-  var _BATCHDOM = (dom) => {
-    dom = DomList(dom);
+  //Event bind operation
+  var eventBinder = glob.addEventListener ?
+    (d) => (ev, handle, cap) => d.addEventListener(ev, handle, cap) :
+    (d) => (ev, handle, cap) => d.attachEvent("on" + ev, handle);
+  var eventUnbinder = glob.removeEventListener ?
+    (d) => (ev, handle, cap) => d.removeEventListener(ev, handle, cap) :
+    (d) => (ev, handle, cap) => d.detachEvent("on" + ev, handle);
 
+  //batch operation for DOM list{{{
+  var _BATCHDOM = (orig, feature) => {
+    var _FeaturePreProc = {
+      "dom": (pre) => DomList(pre),
+      "bom-win" : (pre) => ({"0":orig,"length":1})
+    }
+    var dom = _FeaturePreProc[feature](orig);
+    
+    //DOM methods{{{
     //CPS: enum each DOM object
     var dom_each = function(func){
       _f.each(func)(_f.iList)(dom);
@@ -71,7 +87,7 @@
     //CPS: batch set style
     var dom_sty = function(name,val){
       var styname = styCSS2DOM(name)
-      dom.each((d)=>{
+      dom_each((d)=>{
         if (d.style) d.style[styname] = val;
       });
       return dom_sty;
@@ -79,7 +95,7 @@
 
     //CPS: batch set attribute
     var dom_attr = function(name,val){
-      dom.each((d)=>{
+      dom_each((d)=>{
         d.setAttribute && d.setAttribute(name, val);
       });
       return dom_attr;
@@ -87,7 +103,7 @@
 
     //CPS: batch set proprety
     var dom_prop = function(name,val){
-      dom.each((d)=>{
+      dom_each((d)=>{
         d[name] = val;
       });
       return dom_prop;
@@ -117,7 +133,7 @@
 
     //CPS: batch set value
     var dom_val = function(val){
-      dom.each((d)=>{
+      dom_each((d)=>{
         var valProc = d.nodeType == 1 && setValElement[d.tagName.toLowerCase()];
         return valProc ? valProc(d, val) : null;
       });
@@ -127,32 +143,19 @@
     //Chain: event bind
     var dom_bind = function(name, func, capture){
       var capture = (capture && true) || false; // fix data type
-      //normal event handle
-      var callevent = function(ev){
-        var evnt = ev || event;
-        func.call(this,evnt);
-      };
-      function bindIELegacy(d){ // bind event for legacy version of IE
-        d.attachEvent("on"+name, callevent);
-      };
-      function bindGeneral(d){ // bind event for W3C
-        d.addEventListener(name, callevent, capture);
-      };
-      function unbindIELegacy(d){ // unbind event for legacy version of IE
-        d.detachEvent("on"+name, callevent);
-      };
-      function unbindGeneral(d){ // unbind event for W3C
-        d.removeEventListener(name, callevent, capture);
-      };
       var bindid = _f.uniqueID(8);
-      dom.each((d)=>{
+      dom_each((d)=>{
+        //normal event handle
+        var callevent = function(ev){
+          var evnt = ev || this.event;
+          func.call(this, evnt, d);
+        };
         if (!d._MIO_BIND_) d._MIO_BIND_ = {};
         d._MIO_BIND_[bindid] = {
-          "remove":d.removeEventListener ?
-            (() => unbindGeneral(d)) : (() => unbindIELegacy(d)),
+          "remove":() => eventUnbinder(d)(name, callevent, capture),
           "action":name
         }
-        d.addEventListener ? bindGeneral(d) : bindIELegacy(d);
+        eventBinder(d)(name, callevent, capture);
       });
       return {
         "id":bindid,
@@ -162,7 +165,7 @@
 
     //CPS: event unbind
     var dom_unbind = function(bindid){
-      dom.each((d)=>{
+      dom_each((d)=>{
         if (!d._MIO_BIND_ || !d._MIO_BIND_[bindid]) return;
         d._MIO_BIND_[bindid].remove();
         delete d._MIO_BIND_[bindid];
@@ -185,7 +188,7 @@
       }
       var append = () => unsybList(_f.aFilt(_f.iList, (c)=> c.substr(0,1) != "-"))(options);
       var remove = () => unsybList(_f.aFilt(_f.iList, (c)=> c.substr(0,1) == "-"))(options);
-      dom.each((d)=>{
+      dom_each((d)=>{
         if (d.nodeType != 1) return;
         var mdfTab = (d.className && toCssTab(d.className)) || {};
         _f.each((c)=>{ //append class
@@ -218,10 +221,10 @@
         }
       })(arguments);
       var rst = [];
-      dom.each((d) => {
+      dom_each((d) => {
         rst = rst.concat(genElem(d))
       });
-      return _BATCHDOM(rst);
+      return _BATCHDOM(rst,"dom");
     };
 
     //CPS: batch set child
@@ -245,11 +248,36 @@
           })(_f.iList)(cntlist);
         }
       })(arguments);
-      dom.each((d)=>{
+      dom_each((d)=>{
         addContent(d);
       });
       return dom_child;
     };
+
+    //support document-ready
+    var dom_docready = function(act){
+      var ready_ie8 = (onedoc, act) => {//compatible IE 8
+        var warpEvent = () => {
+          if (document.readyState === "complete"){
+            eventUnbinder(onedoc)("readystatechange", warpEvent, false);
+            act(onedoc);
+          }
+        }
+        eventBinder(onedoc)("readystatechange", warpEvent, false);
+      }
+      var reay_w3c = (onedoc, act) => {//for W3C
+        var warpEvent = () => {
+          eventUnbinder(onedoc)("DOMContentLoaded", warpEvent, false);
+          act(onedoc);
+        }
+        eventBinder(onedoc)("DOMContentLoaded", warpEvent, false);
+      }
+      var readtEvent = glob.addEventListener ? reay_w3c : ready_ie8;
+      dom_each((d)=>{
+        return isDOMDoc(d) && readtEvent(d, act);
+      });
+      return dom_docready;
+    }
 
     var getValElement = {
       "select" : (d) => { //for select element
@@ -294,70 +322,78 @@
     }
 
     //get specify value
-    dom.get = function(name, detail){
-      var domfind = (finder) => finder && (() => _BATCHDOM(finder()));
+    var dom_get = function(name, detail){
+      var domfind = (finder) => finder && (() => _BATCHDOM(finder(),"dom"));
       var getProc = domfind(expDOMFind(dom)(name)) || getActTab[name];
       return getProc(detail);
     };
+    //}}}
 
-    //export methods
-    dom.each = dom_each;
-    dom.sty = dom_sty;
-    dom.attr = dom_attr;
-    dom.prop = dom_prop;
-    dom.val = dom_val;
-    dom.bind = dom_bind;
-    dom.unbind = dom_unbind;
-    dom.css = dom_css;
-    dom.elem = dom_elem;
-    dom.child = dom_child;
-    dom._MIO_DOMLIST = "4.0.0";
-    return dom;
+    //window loaded
+    var bomwin_load = (act) => {
+      dom_each((d) => {
+        var eventWarp = () => {
+          eventUnbinder(d)("load",eventWarp,false);
+          act(d);
+        };
+        eventBinder(d)("load",eventWarp,false);
+      })
+      return bomwin_load;
+    }
+
+    //window resize
+    var bomwin_resize = (act) => {
+      return dom_bind("resize",(ev, owner) => {
+        act.call(this, owner.innerWidth, owner.innerHeight, owner);
+      },false);
+    }
+
+    var _FeatureExport = {
+      "dom": () => { //export DOM methods
+        dom.get = dom_get;
+        dom.each = dom_each;
+        dom.sty = dom_sty;
+        dom.attr = dom_attr;
+        dom.prop = dom_prop;
+        dom.val = dom_val;
+        dom.bind = dom_bind;
+        dom.unbind = dom_unbind;
+        dom.css = dom_css;
+        dom.elem = dom_elem;
+        dom.child = dom_child;
+        dom.ready = dom_docready;
+        dom._MIO_DOMLIST = "4.0.0";
+        return dom;
+      },
+      "bom-win": () => {
+        dom.each = dom_each;
+        dom.bind = dom_bind;
+        dom.unbind = dom_unbind
+        dom.load = bomwin_load;
+        dom.resize = bomwin_resize;
+        return dom;
+      }
+    }
+    return _FeatureExport[feature]()
   };
-
-  //current document ready event
-  var act_ready = () => {
-    var init_ie8 = () => {//compatible IE 8
-      var readyevent = [];
-      var docstate = () => {
-        if (doc.readyState == "complete"){
-          doc.detachEvent("onreadystatechange", docstate);
-          _f.each((act)=>act())(_f.iList)(readyevent)
-        }
-      }
-      doc.attachEvent('onreadystatechange', docstate);
-      return (act) => {
-        readyevent.push(act);
-      }
-    }
-    var init_w3c = () => {//for W3C
-      return (act) => {
-        doc.addEventListener("DOMContentLoaded", () => act(), false);
-      }
-    }
-    return (doc.addEventListener ? init_w3c : init_ie8)();
-  }
-
-  //current window loaded event
-  var act_load = () => {
-    return glob.addEventListener ? (act) => glob.addEventListener("load", () => act(), false) : 
-      glob.attachEvent("onload", () => act());
-  }
+  //}}}
 
   //Add plugins
   _f._toy_((env, plugins, dna)=>{
-    plugins.push((args) => { //Plugin
+    plugins.push((args) => { //Plugin DOM
       if (args.length > 1) return;
       var one = args[0];
       var condExp = () => typeof(one)=="string" && expDOMFind([doc])(one);
       var condDOM = () => isDOMElem(one) && (() => [one]);
       var condDOMList = () => args.length > 0 && isDOMElem(args[0]) &&
         (() => _f.list()(_f.aFilt(_f.iList, (d) => isDOMElem(d)))(args));
-      var domRst = (li) => li && li.length > 0 && (() => _BATCHDOM(li));
+      var domRst = (li) => li && li.length > 0 && (() => _BATCHDOM(li,"dom"));
       var argProc = condExp() || condDOM() || condDOMList();
       return domRst(argProc && argProc());
     });
-    _f.onReady = act_ready(); //document ready
-    _f.onLoad = act_load(); //window loaded
+    plugins.push((args) => { //Plugin BOM Window
+      if (args.length > 1 || !(args[0] instanceof glob.Window)) return;
+      return () => _BATCHDOM(args[0],"bom-win");
+    });
   })()
 })();

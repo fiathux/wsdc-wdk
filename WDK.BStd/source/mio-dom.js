@@ -96,7 +96,8 @@
     //CPS: batch set attribute
     var dom_attr = function(name,val){
       dom_each((d)=>{
-        d.setAttribute && d.setAttribute(name, val);
+        return val === null ? d.removeAttribute && d.removeAttribute(name) :
+          d.setAttribute && d.setAttribute(name, val);
       });
       return dom_attr;
     };
@@ -254,6 +255,22 @@
       return dom_child;
     };
 
+    //clean all child and append more
+    var dom_clean = function() {
+      dom_each((d)=>{
+        d.innerHTML = "";
+      });
+      return dom_child;
+    }
+
+    //set DOM object independent
+    var dom_leave = function() {
+      dom_each((d)=>{
+        d.parentNode && d.parentNode.removeChild(d);
+      });
+      return null;
+    }
+
     //support document-ready
     var dom_docready = function(act){
       var ready_ie8 = (onedoc, act) => {//compatible IE 8
@@ -361,6 +378,8 @@
         dom.css = dom_css;
         dom.elem = dom_elem;
         dom.child = dom_child;
+        dom.clean = dom_clean;
+        dom.leave = dom_leave;
         dom.ready = dom_docready;
         dom._MIO_DOMLIST = "4.0.0";
         return dom;

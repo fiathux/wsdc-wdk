@@ -240,21 +240,31 @@
   var _f = _DNA({}); //Inner functional instance
 
   //generate event bind id
-  function genUniqueID(n){
+  var genUniqueID = (() => {
     var chartab = ["0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f"];
-    var toHex = _f.list((onebyte) => chartab[onebyte >> 4] + chartab[onebyte & 0xf]);
-    var iterByte = (num) => {
-      num = Math.floor(num);
-      return () => {
-        var onebyte = typeof(num) == "number" ? num & 0xff : _f.IterEnd();
-        num = num < 256 ? null : num >>> 8;
-        return onebyte;
+    return (n) => {
+      n = n || 8;
+      var toHex = _f.list((onebyte) => chartab[onebyte >> 4] + chartab[onebyte & 0xf]);
+      var iterByte = (num) => {
+        num = Math.floor(num);
+        return () => {
+          var onebyte = typeof(num) == "number" ? num & 0xff : _f.IterEnd();
+          num = num < 256 ? null : num >>> 8;
+          return onebyte;
+        }
       }
+      var ts_hex = toHex(iterByte)((new Date()).getTime()).join("");
+      var ts_rnd = toHex(_f.aMap(_f.iRange, (i)=>Math.floor(Math.random()*256)))(n).join("");
+      return ts_hex+ts_rnd;
     }
-    var ts_hex = toHex(iterByte)((new Date()).getTime()).join("");
-    var ts_rnd = toHex(_f.aMap(_f.iRange, (i)=>Math.floor(Math.random()*256)))(n).join("");
-    return ts_hex+ts_rnd;
-  }
+  })()
+  //compatible symbol
+  var genSymbol = (() => {
+    var symbImp = () => {
+      return glob.Symbol();
+    }
+    return glob.Symbol ? symbImp : genUniqueID;
+  })();
 
   //create Mio-sys kernel
   var createKernel = () => {
@@ -282,6 +292,7 @@
     }
 
     //tools: export unique id factory
+    exportMod.symbol = genSymbol;
     exportMod.uniqueID = genUniqueID;
 
     //append functional DNA

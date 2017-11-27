@@ -144,7 +144,7 @@
     //Chain: event bind
     var dom_bind = function(name, func, capture){
       var capture = (capture && true) || false; // fix data type
-      var bindid = _f.uniqueID(8);
+      var bindid = _f.symbol();
       dom_each((d)=>{
         //normal event handle
         var callevent = function(ev){

@@ -69,20 +69,20 @@
     (d) => (ev, handle, cap) => d.removeEventListener(ev, handle, cap) :
     (d) => (ev, handle, cap) => d.detachEvent("on" + ev, handle);
 
-  //batch operation for DOM list{{{
-  var _BATCHDOM = (orig, feature) => {
-    var _FeaturePreProc = {
-      "dom": (pre) => DomList(pre),
-      "bom-win" : (pre) => ({"0":orig,"length":1})
-    }
-    var dom = _FeaturePreProc[feature](orig);
-    
-    //DOM methods{{{
+  //abstrac dom operation {{{
+  var _dom_abstrac = (dom) => (factoryImp) => {    
     //CPS: enum each DOM object
     var dom_each = function(func){
       _f.each(func)(_f.iList)(dom);
       return dom_each;
     };
+
+    //Chain: make slice
+    var dom_slice = function(start, end) {
+      var slice = _f.list()(_f.iList)(dom, start, end);
+      if (!slice || slice.length < 1) return null;
+      return factoryImp(slice);
+    }
 
     //CPS: batch set style
     var dom_sty = function(name,val){
@@ -214,7 +214,7 @@
         }
         return (d) => {
           return _f.list((tagname) => {
-            var curdoc = d.nodeType == 9 ? d : doc;
+            var curdoc = d.nodeType == 9 ? d : d.ownerDocument;
             var tagrst = curdoc.createElement(tagname);
             append && d.appendChild(tagrst);
             return tagrst;
@@ -225,7 +225,7 @@
       dom_each((d) => {
         rst = rst.concat(genElem(d))
       });
-      return _BATCHDOM(rst,"dom");
+      return factoryImp(rst);
     };
 
     //CPS: batch set child
@@ -310,7 +310,7 @@
       },
     };
 
-    var getActTab = {
+    var actGetTab = {
       "sty":(val) => {
         var styname = styCSS2DOM(val);
         return _f.list((d)=>d.style && d.style[styname])(_f.iList)(dom)
@@ -339,66 +339,110 @@
     }
 
     //get specify value
-    var dom_get = function(name, detail){
-      var domfind = (finder) => finder && (() => _BATCHDOM(finder(),"dom"));
-      var getProc = domfind(expDOMFind(dom)(name)) || getActTab[name];
+    var exp_dom_get = (actTab) => function(name, detail){
+      var domfind = (finder) => finder && (() => factoryImp(finder()));
+      var getProc = domfind(expDOMFind(dom)(name)) || actTab[name];
       return getProc(detail);
     };
-    //}}}
 
-    //window loaded
-    var bomwin_load = (act) => {
-      dom_each((d) => {
-        var eventWarp = () => {
-          eventUnbinder(d)("load",eventWarp,false);
-          act(d);
-        };
-        eventBinder(d)("load",eventWarp,false);
-      })
-      return bomwin_load;
-    }
-
-    //window resize
-    var bomwin_resize = (act) => {
-      return dom_bind("resize",(ev, owner) => {
-        act.call(this, owner.innerWidth, owner.innerHeight, owner);
-      },false);
-    }
-
-    var _FeatureExport = {
-      "dom": () => { //export DOM methods
-        dom.get = dom_get;
-        dom.each = dom_each;
-        dom.sty = dom_sty;
-        dom.attr = dom_attr;
-        dom.prop = dom_prop;
-        dom.val = dom_val;
-        dom.bind = dom_bind;
-        dom.unbind = dom_unbind;
-        dom.css = dom_css;
-        dom.elem = dom_elem;
-        dom.child = dom_child;
-        dom.clean = dom_clean;
-        dom.leave = dom_leave;
-        dom.ready = dom_docready;
-        dom._MIO_DOMLIST = "4.0.0";
-        return dom;
-      },
-      "bom-win": () => {
-        dom.each = dom_each;
-        dom.bind = dom_bind;
-        dom.unbind = dom_unbind
-        dom.load = bomwin_load;
-        dom.resize = bomwin_resize;
-        return dom;
-      }
-    }
-    return _FeatureExport[feature]()
+    //export abstrac member
+    return {
+      "rule_get":actGetTab,
+      "exp_get":exp_dom_get,
+      "each":dom_each,
+      "slice":dom_slice,
+      "sty":dom_sty,
+      "attr":dom_attr,
+      "prop":dom_prop,
+      "val":dom_val,
+      "bind":dom_bind,
+      "unbind":dom_unbind,
+      "css":dom_css,
+      "elem":dom_elem,
+      "child":dom_child,
+      "clean":dom_clean,
+      "leave":dom_leave,
+      "ready":dom_docready
+    };
   };
   //}}}
 
-  //Add plugins
-  _f._toy_((env, plugins, dna)=>{
+  // plugins installer {{{
+  var installer = (env, plugins, dna) => {
+    //DOM operation copy list
+    var dfCopylist = [
+      "each", "slice","sty","attr","prop","val","bind","unbind",
+      "css","elem","child","clean","leave","ready"
+    ]
+
+    //a dicorator for DOM plugins
+    var domDecorate = (func) => (orig) => {
+      var domobj = func(orig);
+      domobj._MIO_VERSION = "4.0.0";
+      return domobj;
+    };
+
+    //advance function for DOM factory
+    var advDOMFac = () => domDecorate((domlist) => {
+      var domobj = DomList(domlist)
+      //object operation chain
+      domobj.pip = (f) => {
+        f(domobj);
+        return domobj;
+      }
+      //copy abstrac method
+      var abstra = _dom_abstrac(domobj)(advDOMFac());
+      _f.each((name) => {
+        domobj[name] = abstra[name];
+      })(_f.iList)(dfCopylist);
+      domobj.get = abstra.exp_get(abstra.rule_get);
+      domobj._MIO_DOMLIST = true;
+      return domobj;
+    });
+
+    //Window BOM factory
+    var bomWinFac = (bom) => {
+      var winobj = {"0":bom, "length":1};
+      var abstra = _dom_abstrac(winobj)(advDOMFac());
+      //window loaded
+      var bomwin_load = (act) => {
+        abstra.each((d) => {
+          var eventWarp = () => {
+            eventUnbinder(d)("load",eventWarp,false);
+            act(d);
+          };
+          eventBinder(d)("load",eventWarp,false);
+        })
+        return bomwin_load;
+      }
+      //window resize
+      var bomwin_resize = (act) => {
+        return abstra.bind("resize",(ev, owner) => {
+          act.call(this, owner.innerWidth, owner.innerHeight, owner);
+        },false);
+      }
+      //export window
+      winobj.each = abstra.each;
+      winobj.bind = abstra.bind;
+      winobj.unbind = abstra.unbind;
+      winobj.load = bomwin_load;
+      winobj.resize = bomwin_resize;
+      winobj.get = abstra.exp_get({
+        "prop":abstra.rule_get.prop,
+        "bind":abstra.rule_get.bind
+      });
+      winobj._MIO_BOMWIN = true;
+      return winobj;
+    }
+
+    //intall environment
+    env._MIO_DOM = {};
+    env._MIO_DOM.install = installer;
+    env._MIO_DOM.domdeco = (deco) => {
+      domDecorate = ( (origDeco) => (f) => deco(origDeco(f)) )(domDecorate);
+    }
+
+    //install plugins
     plugins.push((args) => { //Plugin DOM
       if (args.length > 1) return;
       var one = args[0];
@@ -406,13 +450,17 @@
       var condDOM = () => isDOMElem(one) && (() => [one]);
       var condDOMList = () => args.length > 0 && isDOMElem(args[0]) &&
         (() => _f.list()(_f.aFilt(_f.iList, (d) => isDOMElem(d)))(args));
-      var domRst = (li) => li && li.length > 0 && (() => _BATCHDOM(li,"dom"));
+      var domRst = (li) => li && li.length > 0 && (() => advDOMFac()(li));
       var argProc = condExp() || condDOM() || condDOMList();
       return domRst(argProc && argProc());
     });
     plugins.push((args) => { //Plugin BOM Window
       if (args.length > 1 || !(args[0] instanceof glob.Window)) return;
-      return () => _BATCHDOM(args[0],"bom-win");
+      return () => bomWinFac(args[0]);
     });
-  })()
+  }
+  //}}}
+
+  //Add plugins to global environment
+  _f._toy_(installer)()
 })();

@@ -310,39 +310,44 @@
       },
     };
 
+    var actGetTemplate = (getter) => (proc) => _f.list((d)=>proc(getter(d), d))(_f.iList)(dom)
     var actGetTab = {
       "sty":(val) => {
         var styname = styCSS2DOM(val);
-        return _f.list((d)=>d.style && d.style[styname])(_f.iList)(dom)
+        return actGetTemplate((d)=>d.style && d.style[styname])
       },
       "attr":(val) => {
-        return _f.list((d)=>d.getAttribute && d.getAttribute(val))(_f.iList)(dom)
+        return actGetTemplate((d)=>d.getAttribute && d.getAttribute(val));
       },
       "prop":(val) => {
-        return _f.list((d)=>d[val])(_f.iList)(dom)
+        return actGetTemplate((d)=>d[val]);
       },
       "val":() => {
-        return _f.list((d)=>((d.nodeType == 1 && getValElement[d.tagName.toLowerCase()]) ||
-          (() => null))(d))(_f.iList)(dom);
+        return actGetTemplate(
+          (d)=>((d.nodeType == 1 && getValElement[d.tagName.toLowerCase()]) ||
+          (() => null))(d));
       },
       "bind":() => {
         var mkBindInf = (d) => d._MIO_BIND_ && 
           _f.list((key) => [key, d._MIO_BIND_[key].name].join(":"))(_f.iKeys)(d._MIO_BIND_);
-        return _f.list(mkBindInf)(_f.iList)(dom)
+        return actGetTemplate(mkBindInf);
       },
       "css":() => {
-        return _f.list((d)=>d.className && d.className.split(" "))(_f.iList)(dom)
+        return actGetTemplate((d)=>d.className && d.className.split(" "));
       },
       "inner":() => {
-        return _f.list((d)=>d.nodeType == 1 && d.innerHTML)(_f.iList)(dom)
+        return actGetTemplate((d)=>d.nodeType == 1 && d.innerHTML);
       }
     }
 
     //get specify value
     var exp_dom_get = (actTab) => function(name, detail){
-      var domfind = (finder) => finder && (() => factoryImp(finder()));
-      var getProc = domfind(expDOMFind(dom)(name)) || actTab[name];
-      return getProc(detail);
+      return (proc) => {
+        proc = proc || ((dist)=>dist);
+        var domfind = (finder) => finder && (() => (proc) => proc(factoryImp(finder())));
+        var getProc = domfind(expDOMFind(dom)(name)) || actTab[name];
+        return getProc(detail)(proc);
+      }
     };
 
     //export abstrac member
@@ -395,7 +400,9 @@
       _f.each((name) => {
         domobj[name] = abstra[name];
       })(_f.iList)(dfCopylist);
-      domobj.get = abstra.exp_get(abstra.rule_get);
+      var getter = abstra.exp_get(abstra.rule_get);
+      domobj.getx = getter
+      domobj.get = function(){ return getter.apply(this,arguments)(); };
       domobj._MIO_DOMLIST = true;
       return domobj;
     });
@@ -427,10 +434,12 @@
       winobj.unbind = abstra.unbind;
       winobj.load = bomwin_load;
       winobj.resize = bomwin_resize;
-      winobj.get = abstra.exp_get({
+      var getter = abstra.exp_get({
         "prop":abstra.rule_get.prop,
         "bind":abstra.rule_get.bind
       });
+      winobj.getx = getter
+      winobj.get = function(){ return getter.apply(this,arguments)(); };
       winobj._MIO_BOMWIN = true;
       return winobj;
     }
@@ -448,8 +457,8 @@
       var one = args[0];
       var condExp = () => typeof(one)=="string" && expDOMFind([doc])(one);
       var condDOM = () => isDOMElem(one) && (() => [one]);
-      var condDOMList = () => args.length > 0 && isDOMElem(args[0]) &&
-        (() => _f.list()(_f.aFilt(_f.iList, (d) => isDOMElem(d)))(args));
+      var condDOMList = () => one.length > 0 && isDOMElem(one[0]) &&
+        (() => _f.list()(_f.aFilt(_f.iList, (d) => isDOMElem(d)))(one));
       var domRst = (li) => li && li.length > 0 && (() => advDOMFac()(li));
       var argProc = condExp() || condDOM() || condDOMList();
       return domRst(argProc && argProc());

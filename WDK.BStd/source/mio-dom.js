@@ -176,7 +176,14 @@
 
     //CPS: batch set css
     var dom_css = function(){
-      var options = arguments;
+      var options = $.each((itm, r)=>{
+        return itm && itm != "" ? $.each((s, r) => {
+          return (s && s != "" ? ()=> {
+            r.push(s)
+            return r
+          } : () => r)()
+        })($.iList, r)(itm.split(" ")) : r
+      })($.iList, [])(arguments)
       var unsybList = (iter) => _f.aMap(iter, (c)=> {
         return c.substr(0,1) == "+" || c.substr(0,1) == "-" ? c.substr(1) : c
       })

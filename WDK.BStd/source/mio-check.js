@@ -207,6 +207,13 @@
     if (glob.ArrayBuffer) this["buffer"]=true;
     if (doc.querySelector) this["selector"]=true;
     if (glob.JSON) this["json"]=true;
+    if (glob.fetch) this["fetch"]=true;
+    if (glob.WebAssembly) this["wasm"]=true;
+    if (glob.Promise) this["promise"]=true;
+    try {
+      eval("function() {s = async function(){}}");
+      this["async"]=true;
+    } catch (e) {}
     return ua;
   });
   //}}}

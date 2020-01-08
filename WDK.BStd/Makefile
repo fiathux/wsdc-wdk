@@ -23,7 +23,7 @@ $(DISTPATH):
 	mkdir $(DISTPATH)
 
 $(DISTPATH)/bstd-web.js: ./source/mio-sys.js ./source/mio-dom.js ./source/mio-check.js ./source/mio-ajax.js
-	$(COMPILE) ./source/mio-sys.js ./source/mio-dom.js ./source/mio-check.js ./source/mio-ajax.js|$(COMPILE)>$(DISTPATH)/bstd-web.js
+	$(COMPILE) ./source/mio-sys.js ./source/mio-dom.js ./source/mio-check.js ./source/mio-ajax.js>$(DISTPATH)/bstd-web.js
 
 $(DISTPATH)/bstd-node.js: ./source/mio-sys.js
-	$(COMPILE) ./source/bstd.js>$(DISTPATH)/bstd-node.js
+	$(COMPILE) ./source/mio-sys.js>$(DISTPATH)/bstd-node.js

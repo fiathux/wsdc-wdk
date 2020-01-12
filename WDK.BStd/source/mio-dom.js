@@ -241,11 +241,11 @@
         return (d) => {
           _f.each((cnt) => {
             var addDOM = () => {
-              d.appendChild(cnt.cloneNode(true));
+              d.appendChild(cnt);
             };
             var addMioDOM = () => {
               cnt.each((cntone) => {
-                cntone.nodeType == 1 && d.appendChild(cntone.cloneNode(true));
+                cntone.nodeType == 1 && d.appendChild(cntone);
               });
             };
             var addHTML = () => {
